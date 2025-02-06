@@ -1,40 +1,39 @@
-using System.Collections;
-using System.Collections.Generic;
-using Unity.MLAgents;
 using Unity.MLAgents.Actuators;
 using Unity.MLAgents.Sensors;
+using Unity.MLAgents;
 using UnityEngine;
 
 public class MoveToGoalAgent : Agent
 {
-    [SerializeField] private Transform targetTransform;
+    [SerializeField] private Transform targetTransform;  // Add this line to reference the target/goal
     [SerializeField] private Material winMaterial;
     [SerializeField] private Material loseMaterial;
     [SerializeField] private MeshRenderer agentMeshRenderer;
 
-    // Add a reference to the Rigidbody for jumping
     private Rigidbody agentRigidbody;
     [SerializeField] private float jumpForce = 5f;
     private bool isGrounded;
 
-    // Called at the start to initialize the Rigidbody
+    private GameObject wallInstance;
+    [SerializeField] private GameObject wallPrefab;
+
+    // The wall heights will be updated automatically based on curriculum.
+    private float[] wallHeights = new float[] { 1f, 3f, 5f, 7f };  // Different wall heights for curriculum
+
     private void Start()
     {
         agentRigidbody = GetComponent<Rigidbody>();
     }
 
-    [SerializeField] private GameObject wallPrefab;
-    private GameObject wallInstance;
-
     public override void OnEpisodeBegin()
     {
-        // Define platform boundaries
-        float minX = -2f, maxX = 2f;
-        float minZ = -2f, maxZ = 2f;
+        // Define platform boundaries and random positions
+        float minX = 2.5f, maxX = 5f;
+        float minZ = -3f, maxZ = 3f;
 
         // Generate random positions ensuring a minimum distance between them
         Vector3 agentPosition, targetPosition;
-        float minDistance = 4f; // Ensure they are not too close
+        float minDistance = 4f;
 
         do
         {
@@ -45,9 +44,9 @@ public class MoveToGoalAgent : Agent
 
         // Assign positions
         transform.localPosition = agentPosition;
-        targetTransform.localPosition = targetPosition;
+        targetTransform.localPosition = targetPosition;  // Now it will work, as targetTransform is assigned
 
-        // Spawn the wall once per episode in the middle of the platform
+        // Spawn the wall
         if (wallInstance == null)
         {
             wallInstance = Instantiate(wallPrefab);
@@ -56,34 +55,29 @@ public class MoveToGoalAgent : Agent
         // Set wall position in the center
         wallInstance.transform.position = new Vector3(0, 0.5f, 0);
 
-        // Set wall height randomly and ensure it spans the platform (Z scale = 15)
-        float wallHeight = Random.Range(1f, 2.5f);
-        wallInstance.transform.localScale = new Vector3(1f, wallHeight, 15f);
+        // Wall height is automatically adjusted by curriculum, but we can start with the lowest value
+        wallInstance.transform.localScale = new Vector3(1f, wallHeights[0], 15f);
     }
-
-
 
     public override void CollectObservations(VectorSensor sensor)
     {
         sensor.AddObservation(transform.localPosition);
-        sensor.AddObservation(targetTransform.localPosition);
-        sensor.AddObservation(isGrounded); // Add whether the agent is grounded
+        sensor.AddObservation(targetTransform.localPosition);  // Use targetTransform here
+        sensor.AddObservation(isGrounded);
     }
 
     public override void OnActionReceived(ActionBuffers actions)
     {
         float moveX = actions.ContinuousActions[0];
         float moveZ = actions.ContinuousActions[1];
-        int jumpAction = actions.DiscreteActions[0]; // Get the jump action
+        int jumpAction = actions.DiscreteActions[0];
 
+        // Move the agent
         float moveSpeed = 10f;
         transform.localPosition += new Vector3(moveX, 0, moveZ) * Time.deltaTime * moveSpeed;
 
-        // Handle jumping action
-        if (jumpAction == 1 && isGrounded) // Check if the agent should jump
-        {
-            Jump();
-        }
+        // Handle jumping
+        if (jumpAction == 1 && isGrounded) Jump();
     }
 
     public override void Heuristic(in ActionBuffers actionsOut)
@@ -92,25 +86,22 @@ public class MoveToGoalAgent : Agent
         continuousActions[0] = Input.GetAxisRaw("Horizontal");
         continuousActions[1] = Input.GetAxisRaw("Vertical");
 
-        // For jump action, use the spacebar as an input
         ActionSegment<int> discreteActions = actionsOut.DiscreteActions;
-        discreteActions[0] = Input.GetKey(KeyCode.Space) ? 1 : 0; // 1 for jump, 0 for no jump
+        discreteActions[0] = Input.GetKey(KeyCode.Space) ? 1 : 0;
     }
 
     private void Jump()
     {
-        // Apply a force to the Rigidbody to make the agent jump
         if (isGrounded)
         {
             agentRigidbody.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
-            isGrounded = false; // Set isGrounded to false while in the air
+            isGrounded = false;
         }
     }
 
-    // Check if the agent is grounded by detecting collisions
     private void OnCollisionEnter(Collision collision)
     {
-        if (collision.collider.CompareTag("ground")) // Assuming "Ground" is the tag for the ground
+        if (collision.collider.CompareTag("ground"))
         {
             isGrounded = true;
         }
@@ -120,14 +111,14 @@ public class MoveToGoalAgent : Agent
     {
         if (other.TryGetComponent<Goal>(out Goal goal))
         {
-            SetReward(+1f);
+            SetReward(+1f); // Agent earns reward for reaching the goal
             agentMeshRenderer.material = winMaterial;
             EndEpisode();
         }
 
         if (other.TryGetComponent<Wall>(out Wall wall))
         {
-            SetReward(-1f);
+            SetReward(-1f); // Agent earns negative reward for hitting the wall
             agentMeshRenderer.material = loseMaterial;
             EndEpisode();
         }
