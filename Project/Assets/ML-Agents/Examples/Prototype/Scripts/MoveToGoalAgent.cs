@@ -1,11 +1,11 @@
+using Unity.MLAgents;
 using Unity.MLAgents.Actuators;
 using Unity.MLAgents.Sensors;
-using Unity.MLAgents;
 using UnityEngine;
 
 public class MoveToGoalAgent : Agent
 {
-    [SerializeField] private Transform targetTransform;  // Add this line to reference the target/goal
+    [SerializeField] private Transform targetTransform;
     [SerializeField] private Material winMaterial;
     [SerializeField] private Material loseMaterial;
     [SerializeField] private MeshRenderer agentMeshRenderer;
@@ -17,8 +17,8 @@ public class MoveToGoalAgent : Agent
     private GameObject wallInstance;
     [SerializeField] private GameObject wallPrefab;
 
-    // The wall heights will be updated automatically based on curriculum.
-    private float[] wallHeights = new float[] { 1f, 3f, 5f, 7f };  // Different wall heights for curriculum
+    private float cumulativeReward = 0f;  // Track total reward per episode
+    private int stepCount = 0;  // Track steps per episode
 
     private void Start()
     {
@@ -27,14 +27,14 @@ public class MoveToGoalAgent : Agent
 
     public override void OnEpisodeBegin()
     {
-        // Define platform boundaries and random positions
+        cumulativeReward = 0f;  // Reset reward tracking
+        stepCount = 0;  // Reset step count
+
         float minX = 2.5f, maxX = 5f;
         float minZ = -3f, maxZ = 3f;
-
-        // Generate random positions ensuring a minimum distance between them
-        Vector3 agentPosition, targetPosition;
         float minDistance = 4f;
 
+        Vector3 agentPosition, targetPosition;
         do
         {
             agentPosition = new Vector3(Random.Range(minX, maxX), 0, Random.Range(minZ, maxZ));
@@ -42,41 +42,50 @@ public class MoveToGoalAgent : Agent
         }
         while (Vector3.Distance(agentPosition, targetPosition) < minDistance);
 
-        // Assign positions
         transform.localPosition = agentPosition;
-        targetTransform.localPosition = targetPosition;  // Now it will work, as targetTransform is assigned
+        targetTransform.localPosition = targetPosition;
 
-        // Spawn the wall
-        if (wallInstance == null)
+        // Fetch updated wall height from ML-Agents environment parameters
+        float currentWallHeight = Academy.Instance.EnvironmentParameters.GetWithDefault("wall_height", 0.0f);
+
+        if (currentWallHeight > 0)
         {
-            wallInstance = Instantiate(wallPrefab);
+            if (wallInstance == null)
+            {
+                wallInstance = Instantiate(wallPrefab);
+            }
+            wallInstance.transform.position = new Vector3(0, currentWallHeight / 2f, 0);
+            wallInstance.transform.localScale = new Vector3(1f, currentWallHeight, 15f);
         }
-
-        // Set wall position in the center
-        wallInstance.transform.position = new Vector3(0, 0.5f, 0);
-
-        // Wall height is automatically adjusted by curriculum, but we can start with the lowest value
-        wallInstance.transform.localScale = new Vector3(1f, wallHeights[0], 15f);
+        else
+        {
+            if (wallInstance != null)
+            {
+                Destroy(wallInstance);
+                wallInstance = null;
+            }
+        }
     }
 
     public override void CollectObservations(VectorSensor sensor)
     {
         sensor.AddObservation(transform.localPosition);
-        sensor.AddObservation(targetTransform.localPosition);  // Use targetTransform here
+        sensor.AddObservation(targetTransform.localPosition);
         sensor.AddObservation(isGrounded);
     }
 
     public override void OnActionReceived(ActionBuffers actions)
     {
+        stepCount++;
+        cumulativeReward += GetCumulativeReward();  // Track total rewards
+
         float moveX = actions.ContinuousActions[0];
         float moveZ = actions.ContinuousActions[1];
         int jumpAction = actions.DiscreteActions[0];
 
-        // Move the agent
         float moveSpeed = 10f;
         transform.localPosition += new Vector3(moveX, 0, moveZ) * Time.deltaTime * moveSpeed;
 
-        // Handle jumping
         if (jumpAction == 1 && isGrounded) Jump();
     }
 
@@ -111,16 +120,24 @@ public class MoveToGoalAgent : Agent
     {
         if (other.TryGetComponent<Goal>(out Goal goal))
         {
-            SetReward(+1f); // Agent earns reward for reaching the goal
+            SetReward(+1f);
             agentMeshRenderer.material = winMaterial;
             EndEpisode();
         }
 
         if (other.TryGetComponent<Wall>(out Wall wall))
         {
-            SetReward(-1f); // Agent earns negative reward for hitting the wall
+            SetReward(-1f);
             agentMeshRenderer.material = loseMaterial;
             EndEpisode();
         }
+    }
+
+    void Update()
+    {
+        float meanReward = stepCount > 0 ? cumulativeReward / stepCount : 0f;
+        float currentWallHeight = Academy.Instance.EnvironmentParameters.GetWithDefault("wall_height", 0.0f);
+
+        Debug.Log($"[INFO] Steps: {stepCount}, Mean Reward: {meanReward}, Wall Height: {currentWallHeight}");
     }
 }

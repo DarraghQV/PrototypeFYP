@@ -25,31 +25,31 @@ behaviors:
     summary_freq: 10000
 
 environment_parameters:
-  # This is where you define the environment parameters related to curriculum
-  wall_height:  # Name of the environment parameter you're modifying (could be anything)
+  wall_height:
     curriculum:
-      - name: Increase Wall Height Slowly
+      - name: No Wall
         completion_criteria:
-          measure: progress  # The measure to track agent's progress (could be reward, steps, etc.)
-          behavior: MoveToGoal  # Link to the specific behavior of your agent
-          signal_smoothing: true  # Optional: smooth the reward signal
-          min_lesson_length: 100  # Minimum steps before progressing to next lesson
-          threshold: 0.2  # Progress threshold to move to next curriculum stage
-        value: 1.0  # Start value for wall_height
-
-      - name: Raise Wall Height
-        completion_criteria:
-          measure: progress
+          measure: reward  
           behavior: MoveToGoal
           signal_smoothing: true
           min_lesson_length: 100
-          threshold: 0.6  # Threshold for when to advance to the next lesson
-          require_reset: true  # Reset environment at the start of the new lesson
+          threshold: 0.8  
+        value: 0.0  
+
+      - name: Introduce Wall 
+        completion_criteria:
+          measure: reward
+          behavior: MoveToGoal
+          signal_smoothing: true
+          min_lesson_length: 500
+          threshold: 0.95  
+          require_reset: true
         value:
-          sampler_type: uniform  # Randomly sample between values within a range
+          sampler_type: uniform
           sampler_parameters:
-            min_value: 3.0
-            max_value: 7.0  # Range of values for wall height during this lesson
+            min_value: 2.0
+            max_value: 4.0
 
       - name: Final Wall Height
-        value: 8.0  # Final wall height after the curriculum ends
+        value: 8.0  
+
