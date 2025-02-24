@@ -126,14 +126,6 @@ public class MoveToGoalAgent : Agent
         }
     }
 
-    private void OnCollisionExit(Collision collision)
-    {
-        if (collision.collider.CompareTag("JumpHelp"))
-        {
-            canJumpOnJumpHelp = false;  // Disallow jump when leaving JumpHelp
-        }
-    }
-
     private void OnTriggerEnter(Collider other)
     {
         if (other.TryGetComponent<Goal>(out Goal goal))

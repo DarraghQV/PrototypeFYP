@@ -66,5 +66,5 @@ environment_parameters:
            max_value: 4.0
 
       - name: Final Wall Height
-        value: 8.0  
+        value: 5.25  
 
