@@ -3,7 +3,7 @@ using Unity.MLAgents.Actuators;
 using Unity.MLAgents.Sensors;
 using UnityEngine;
 
-public class MoveToGoalAgent : Agent
+public class MoveToGoalAgentV2: Agent
 {
     [SerializeField] private Transform targetTransform;
     [SerializeField] private Material winMaterial;
@@ -36,14 +36,13 @@ public class MoveToGoalAgent : Agent
 
         Vector3 fixedTargetPosition = new Vector3(5f, -0.25f, -4f);
 
-        float minX = 2.5f, maxX = 5f;
-        float minZ = -3f, maxZ = 3f;
+        
         float minDistance = 4f;
 
         Vector3 agentPosition;
         do
         {
-            agentPosition = new Vector3(Random.Range(minX, maxX), 0, Random.Range(minZ, maxZ));
+            agentPosition = new Vector3(-7,15,0);
         }
         while (Vector3.Distance(agentPosition, fixedTargetPosition) < minDistance);
 
@@ -84,7 +83,7 @@ public class MoveToGoalAgent : Agent
         float moveZ = actions.ContinuousActions[1];
         int jumpAction = actions.DiscreteActions[0];
 
-        float moveSpeed = 10f;
+        float moveSpeed = 20f;
         transform.localPosition += new Vector3(moveX, 0, moveZ) * Time.deltaTime * moveSpeed;
 
         if (jumpAction == 1 && (isGrounded || canJumpOnJumpHelp))

@@ -32,6 +32,16 @@ TagManager:
   - tile
   - boundary
   - jumphelp
+  - ex
+  - key
+  - blockLarge
+  - blockSmall
+  - blockVeryLarge
+  - lock
+  - dragon
+  - portal
+  - plus
+  - extraGoal
   layers:
   - Default
   - TransparentFX
