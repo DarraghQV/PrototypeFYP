@@ -50,7 +50,6 @@ environment_parameters:
             min_value: 1.0
             max_value: 2.0
 
-
       - name: Medium Wall 
         completion_criteria:
           measure: reward
@@ -66,5 +65,14 @@ environment_parameters:
            max_value: 4.0
 
       - name: Final Wall Height
-        value: 5.25  
+        completion_criteria:
+          measure: reward
+          behavior: MoveToGoal
+          signal_smoothing: true
+          min_lesson_length: 100
+          threshold: 0.8  
+          require_reset: true
+        value: 5.25
 
+      - name: New Platform
+        value: 5.3  # Same wall height, but now the agent spawns on the new platform

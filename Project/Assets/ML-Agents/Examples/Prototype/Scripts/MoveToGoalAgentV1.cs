@@ -21,6 +21,8 @@ public class MoveToGoalAgentV1 : Agent
     private float cumulativeReward = 0f;
     private int stepCount = 0;
 
+    private bool isNewPlatformActive = false; // Track if the new platform is active
+
     private void Start()
     {
         agentRigidbody = GetComponent<Rigidbody>();
@@ -34,24 +36,30 @@ public class MoveToGoalAgentV1 : Agent
         cumulativeReward = 0f;
         stepCount = 0;
 
-        Vector3 fixedTargetPosition = new Vector3(5f, -0.25f, -4f);
+        float currentWallHeight = Academy.Instance.EnvironmentParameters.GetWithDefault("wall_height", 0.0f);
 
-        float minX = 2.5f, maxX = 5f;
-        float minZ = -3f, maxZ = 3f;
-        float minDistance = 4f;
+        // Check if the new platform is active
+        isNewPlatformActive = currentWallHeight > 5.25f;
 
         Vector3 agentPosition;
-        do
+        if (isNewPlatformActive)
         {
-            agentPosition = new Vector3(Random.Range(minX, maxX), 0, Random.Range(minZ, maxZ));
+            // Spawn on the new platform at (50, 5, 0) in world space
+            agentPosition = new Vector3(50f, 5f, 0f);
+            Debug.Log("Agent spawned on the new platform at (50, 5, 0) in world space.");
         }
-        while (Vector3.Distance(agentPosition, fixedTargetPosition) < minDistance);
+        else
+        {
+            // Spawn at the initial position (-3.5, 0, 0) in world space
+            agentPosition = new Vector3(-3.5f, 0f, 0f);
+            Debug.Log("Agent spawned at the initial position (-3.5, 0, 0) in world space.");
+        }
 
-        transform.localPosition = agentPosition;
-        targetTransform.localPosition = fixedTargetPosition;
+        // Use world position for spawning
+        transform.position = agentPosition;
+        targetTransform.position = new Vector3(5f, -0.25f, -4f); // Fixed target position in world space
 
-        float currentWallHeight = Academy.Instance.EnvironmentParameters.GetWithDefault("wall_height", 0.0f);
-        if (currentWallHeight > 0)
+        if (currentWallHeight > 0 && !isNewPlatformActive)
         {
             if (wallInstance == null)
             {
@@ -67,6 +75,13 @@ public class MoveToGoalAgentV1 : Agent
                 Destroy(wallInstance);
                 wallInstance = null;
             }
+        }
+
+        // Debugging: Check for colliders at the spawn position
+        Collider[] colliders = Physics.OverlapSphere(agentPosition, 0.1f);
+        if (colliders.Length > 0)
+        {
+            Debug.LogWarning($"Colliders detected at spawn position: {agentPosition}");
         }
     }
 
@@ -84,8 +99,9 @@ public class MoveToGoalAgentV1 : Agent
         float moveZ = actions.ContinuousActions[1];
         int jumpAction = actions.DiscreteActions[0];
 
-        float moveSpeed = 10f;
-        transform.localPosition += new Vector3(moveX, 0, moveZ) * Time.deltaTime * moveSpeed;
+        // Use Rigidbody for movement to respect physics and collisions
+        Vector3 movement = new Vector3(moveX, 0, moveZ) * 10f * Time.deltaTime;
+        agentRigidbody.MovePosition(transform.position + movement);
 
         if (jumpAction == 1 && (isGrounded || canJumpOnJumpHelp))
         {
@@ -119,25 +135,30 @@ public class MoveToGoalAgentV1 : Agent
         {
             isGrounded = true;
         }
-
-        if (collision.collider.CompareTag("JumpHelp"))
-        {
-            canJumpOnJumpHelp = true;  // Allow jump when on JumpHelp tag
-        }
     }
 
     private void OnTriggerEnter(Collider other)
     {
         if (other.TryGetComponent<Goal>(out Goal goal))
         {
-            SetReward(+1f);
+            // Increased reward for reaching the goal
+            SetReward(+2f); // Increased from +1f to +2f
+            agentMeshRenderer.material = winMaterial;
+            EndEpisode();
+        }
+
+        if (other.TryGetComponent<ExtraGoal>(out ExtraGoal extraGoal))
+        {
+            // Reward for reaching the extra goal
+            SetReward(+1.5f); // Adjust this value as needed
             agentMeshRenderer.material = winMaterial;
             EndEpisode();
         }
 
         if (other.TryGetComponent<Wall>(out Wall wall))
         {
-            SetReward(-1f);
+            // Increased penalty for running out of bounds
+            SetReward(-2f); // Increased from -1f to -2f
             agentMeshRenderer.material = loseMaterial;
             EndEpisode();
         }
@@ -150,7 +171,7 @@ public class MoveToGoalAgentV1 : Agent
         float meanReward = stepCount > 0 ? cumulativeReward / stepCount : 0f;
         float currentWallHeight = Academy.Instance.EnvironmentParameters.GetWithDefault("wall_height", 0.0f);
 
-        Debug.Log($"[INFO] Steps: {stepCount}, Mean Reward: {meanReward}, Wall Height: {currentWallHeight}");
+        Debug.Log($"[INFO] Steps: {stepCount}, Mean Reward: {meanReward}, Wall Height: {currentWallHeight}, New Platform Active: {isNewPlatformActive}");
     }
 
     private void RotateTowardsMouse()
@@ -169,6 +190,22 @@ public class MoveToGoalAgentV1 : Agent
                 Quaternion targetRotation = Quaternion.LookRotation(direction);
                 transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, Time.deltaTime * 10f);
             }
+        }
+    }
+
+    private void OnDrawGizmos()
+    {
+        if (isNewPlatformActive)
+        {
+            // Visualize the new platform spawn position
+            Gizmos.color = Color.green;
+            Gizmos.DrawWireCube(new Vector3(50f, 5f, 0f), new Vector3(1f, 1f, 1f));
+        }
+        else
+        {
+            // Visualize the initial spawn position
+            Gizmos.color = Color.red;
+            Gizmos.DrawWireCube(new Vector3(-3.5f, 0f, 0f), new Vector3(1f, 1f, 1f));
         }
     }
 }
