@@ -118,11 +118,6 @@ public class MoveToGoalAgentV2: Agent
         {
             isGrounded = true;
         }
-
-        if (collision.collider.CompareTag("JumpHelp"))
-        {
-            canJumpOnJumpHelp = true;  // Allow jump when on JumpHelp tag
-        }
     }
 
     private void OnTriggerEnter(Collider other)
