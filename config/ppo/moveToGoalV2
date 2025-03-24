@@ -1,0 +1,107 @@
+behaviors:
+  MoveToGoal:
+    trainer_type: ppo
+    hyperparameters:
+      batch_size: 10
+      buffer_size: 100
+      learning_rate: ${learning_rate}  # Dynamically adjusted per lesson
+      beta: 5.0e-4
+      epsilon: 0.2
+      lambd: 0.99
+      num_epoch: 3
+      learning_rate_schedule: linear
+      beta_schedule: constant
+      epsilon_schedule: linear
+    network_settings:
+      normalize: false
+      hidden_units: 128
+      num_layers: 2
+    reward_signals:
+      extrinsic:
+        gamma: 0.99
+        strength: 1.0
+      curiosity:  # Intrinsic reward added for exploration
+        gamma: 0.99
+        strength: ${curiosity_strength}  # Dynamically adjusted per lesson
+    max_steps: 700000
+    time_horizon: 64
+    summary_freq: 10000
+
+environment_parameters:
+  wall_height:
+    curriculum:
+      - name: No Wall
+        completion_criteria:
+          measure: reward  
+          behavior: MoveToGoal
+          signal_smoothing: true
+          min_lesson_length: 100
+          threshold: 0.8  
+        value: 0.0  
+
+      - name: Introduce Easy Wall 
+        completion_criteria:
+          measure: reward
+          behavior: MoveToGoal
+          signal_smoothing: true
+          min_lesson_length: 100
+          threshold: 0.8  
+          require_reset: true
+        value:
+          sampler_type: uniform
+          sampler_parameters:
+            min_value: 1.0
+            max_value: 2.0
+
+      - name: Medium Wall 
+        completion_criteria:
+          measure: reward
+          behavior: MoveToGoal
+          signal_smoothing: true
+          min_lesson_length: 100
+          threshold: 0.8  
+          require_reset: true
+        value:
+         sampler_type: uniform
+         sampler_parameters:
+           min_value: 3.0
+           max_value: 4.0
+
+      - name: Final Wall Height
+        completion_criteria:
+          measure: reward
+          behavior: MoveToGoal
+          signal_smoothing: true
+          min_lesson_length: 100
+          threshold: 0.8  
+          require_reset: true
+        value: 5.25
+
+      - name: New Platform
+        value: 5.3  # Same wall height, but now the agent spawns on the new platform
+
+  learning_rate:
+    curriculum:
+      - name: No Wall
+        value: 3.0e-4
+      - name: Introduce Easy Wall
+        value: 3.0e-4
+      - name: Medium Wall
+        value: 3.0e-4
+      - name: Final Wall Height
+        value: 3.0e-4
+      - name: New Platform
+        value: 5.0e-4  # Increased learning rate for adapting to new environment
+
+  curiosity_strength:
+    curriculum:
+      - name: No Wall
+        value: 0.0  # No intrinsic motivation
+      - name: Introduce Easy Wall
+        value: 0.0
+      - name: Medium Wall
+        value: 0.0
+      - name: Final Wall Height
+        value: 0.0
+      - name: New Platform
+        value: 0.01  # Encourages exploration in new environment

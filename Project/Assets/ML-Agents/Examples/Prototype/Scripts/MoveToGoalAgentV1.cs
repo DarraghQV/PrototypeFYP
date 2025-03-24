@@ -37,6 +37,8 @@ public class MoveToGoalAgentV1 : Agent
         stepCount = 0;
 
         float currentWallHeight = Academy.Instance.EnvironmentParameters.GetWithDefault("wall_height", 0.0f);
+        float currentLearningRate = Academy.Instance.EnvironmentParameters.GetWithDefault("learning_rate", 3.0e-4f);
+        float curiosityStrength = Academy.Instance.EnvironmentParameters.GetWithDefault("curiosity_strength", 0.0f);
 
         // Check if the new platform is active
         isNewPlatformActive = currentWallHeight > 5.25f;
@@ -83,6 +85,8 @@ public class MoveToGoalAgentV1 : Agent
         {
             Debug.LogWarning($"Colliders detected at spawn position: {agentPosition}");
         }
+
+        Debug.Log($"[INFO] Learning Rate: {currentLearningRate}, Curiosity Strength: {curiosityStrength}");
     }
 
     public override void CollectObservations(VectorSensor sensor)
@@ -141,8 +145,8 @@ public class MoveToGoalAgentV1 : Agent
     {
         if (other.TryGetComponent<Goal>(out Goal goal))
         {
-            // Increased reward for reaching the goal
-            SetReward(+2f); // Increased from +1f to +2f
+            float explorationBonus = Academy.Instance.EnvironmentParameters.GetWithDefault("curiosity_strength", 0.0f);
+            SetReward(2.0f + explorationBonus); // Increased reward if curiosity is active
             agentMeshRenderer.material = winMaterial;
             EndEpisode();
         }
@@ -150,15 +154,15 @@ public class MoveToGoalAgentV1 : Agent
         if (other.TryGetComponent<ExtraGoal>(out ExtraGoal extraGoal))
         {
             // Reward for reaching the extra goal
-            SetReward(+1.5f); // Adjust this value as needed
+            SetReward(+1.5f);
             agentMeshRenderer.material = winMaterial;
             EndEpisode();
         }
 
         if (other.TryGetComponent<Wall>(out Wall wall))
         {
-            // Increased penalty for running out of bounds
-            SetReward(-2f); // Increased from -1f to -2f
+            // Increased penalty for running into walls
+            SetReward(-2f);
             agentMeshRenderer.material = loseMaterial;
             EndEpisode();
         }
