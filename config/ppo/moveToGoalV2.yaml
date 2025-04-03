@@ -37,7 +37,7 @@ environment_parameters:
           signal_smoothing: true
           min_lesson_length: 100
           threshold: 0.8
-        value: -1.0  # No walls, but agent trains on collecting Extra Goals
+        value: -1.0  
 
       - name: No Wall
         completion_criteria:

@@ -23,66 +23,74 @@ public class MoveToGoalAgentV1 : Agent
     private int stepCount = 0;
     private int extraGoalsCollected = 0;
     private bool isExtraGoalTraining = false;
-    private bool isNewPlatformActive = false; // Track if the new platform is active
+    private bool isNewPlatformActive = false;
 
-    private List<ExtraGoal> extraGoals = new List<ExtraGoal>(); // To keep track of extra goals
-    private List<Vector3> originalPositions = new List<Vector3>(); // Store original positions of extra goals
+    private List<ExtraGoal> extraGoals = new List<ExtraGoal>();
 
     private void Start()
     {
         agentRigidbody = GetComponent<Rigidbody>();
         agentRigidbody.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
+        CacheExtraGoals();
     }
 
-    // Called at the beginning of each episode
+    private void CacheExtraGoals()
+    {
+        // Find all ExtraGoal objects in the scene, including inactive ones
+        ExtraGoal[] allExtraGoals = Resources.FindObjectsOfTypeAll<ExtraGoal>();
+        extraGoals.Clear();
+
+        foreach (ExtraGoal goal in allExtraGoals)
+        {
+            // Only include objects in the scene hierarchy (not prefabs)
+            if (goal.gameObject.scene.IsValid())
+            {
+                extraGoals.Add(goal);
+            }
+        }
+    }
+
     public override void OnEpisodeBegin()
     {
         cumulativeReward = 0f;
         stepCount = 0;
         extraGoalsCollected = 0;
 
-        // Initialize the position variables
         float currentWallHeight = Academy.Instance.EnvironmentParameters.GetWithDefault("wall_height", 0.0f);
         isExtraGoalTraining = currentWallHeight == -1.0f;
         isNewPlatformActive = currentWallHeight > 5.25f;
 
-        // **Adjust Jump Force**
         jumpForce = isExtraGoalTraining ? 0f : 10f;
         Debug.Log($"Jump Force Set To: {jumpForce}");
 
         Vector3 agentPosition;
         if (isExtraGoalTraining)
         {
-            // **Spawn agent at (-41, 0, 0) for Extra Goals Training**
             agentPosition = new Vector3(-41f, 0f, 0f);
             Debug.Log("Agent in Extra Goals Training, spawned at (-41, 0, 0)");
         }
         else if (isNewPlatformActive)
         {
-            // **Spawn on the new platform at (50, 5, 0)**
             agentPosition = new Vector3(50f, 5f, 0f);
             Debug.Log("Agent spawned on the new platform.");
         }
         else
         {
-            // **Normal spawn at (-3.5, 0, 0)**
             agentPosition = new Vector3(-3.5f, 0f, 0f);
             Debug.Log("Agent spawned at the normal position.");
         }
 
         transform.position = agentPosition;
 
-        // **Adjust target position**
         if (isExtraGoalTraining)
         {
-            targetTransform.position = new Vector3(0, -0.25f, 0); // Placeholder target
+            targetTransform.position = new Vector3(0, -0.25f, 0);
         }
         else
         {
             targetTransform.position = new Vector3(5f, -0.25f, -4f);
         }
 
-        // **Handle Wall**
         if (currentWallHeight > 0 && !isNewPlatformActive)
         {
             if (wallInstance == null)
@@ -103,22 +111,18 @@ public class MoveToGoalAgentV1 : Agent
 
         Debug.Log($"[INFO] Wall Height: {currentWallHeight}, New Platform: {isNewPlatformActive}, Extra Goal Training: {isExtraGoalTraining}");
 
-        // Store original positions of ExtraGoals and reset them
-        extraGoals.Clear(); // Ensure the list is cleared at the start of each episode
-        originalPositions.Clear(); // Clear old data before adding new ones
+        // Re-enable all extra goals at episode start
+        EnableAllExtraGoals();
+    }
 
-        extraGoals.AddRange(FindObjectsOfType<ExtraGoal>());
-
-        // Store the original positions of the extra goals
-        foreach (var extraGoal in extraGoals)
+    private void EnableAllExtraGoals()
+    {
+        foreach (ExtraGoal goal in extraGoals)
         {
-            originalPositions.Add(extraGoal.transform.position);  // Save original positions
-        }
-
-        // Make sure all ExtraGoals are visible again (we’ll move them later when collected)
-        foreach (var extraGoal in extraGoals)
-        {
-            extraGoal.gameObject.SetActive(true);  // Ensure extra goals are visible
+            if (goal != null)
+            {
+                goal.gameObject.SetActive(true);
+            }
         }
     }
 
@@ -177,31 +181,26 @@ public class MoveToGoalAgentV1 : Agent
     {
         if (other.TryGetComponent<Goal>(out Goal goal))
         {
-            // Reward and End Episode for regular Goal
-            if (!isExtraGoalTraining) // Only end episode if NOT in extra goal training
+            if (!isExtraGoalTraining)
             {
                 float explorationBonus = Academy.Instance.EnvironmentParameters.GetWithDefault("curiosity_strength", 0.0f);
                 SetReward(3.0f + explorationBonus);
                 agentMeshRenderer.material = winMaterial;
-                Destroy(goal.gameObject); // Optionally destroy goal
+                EnableAllExtraGoals();
                 EndEpisode();
             }
         }
 
         if (other.TryGetComponent<ExtraGoal>(out ExtraGoal extraGoal))
         {
-            // Reward for ExtraGoal and move it to a hidden location
-            SetReward(1.5f); // Adjust this value as needed
+            SetReward(1.5f);
             agentMeshRenderer.material = winMaterial;
-
             extraGoalsCollected++;
+            extraGoal.gameObject.SetActive(false);
 
-            // Move the ExtraGoal to a hidden location
-            extraGoal.transform.position = new Vector3(100f, 100f, 100f);  // A place far from the agent
-
-            // End Episode ONLY after collecting 3 Extra Goals
             if (isExtraGoalTraining && extraGoalsCollected >= 3)
             {
+                EnableAllExtraGoals();
                 EndEpisode();
             }
         }
@@ -210,11 +209,12 @@ public class MoveToGoalAgentV1 : Agent
         {
             SetReward(-2f);
             agentMeshRenderer.material = loseMaterial;
+            EnableAllExtraGoals();
             EndEpisode();
         }
     }
 
-    void Update()
+    private void Update()
     {
         RotateTowardsMouse();
 
@@ -241,33 +241,15 @@ public class MoveToGoalAgentV1 : Agent
         }
     }
 
-    // Restore positions at the start of the episode
-    private void RestoreExtraGoalPositions()
-    {
-        for (int i = 0; i < extraGoals.Count; i++)
-        {
-            ExtraGoal goal = extraGoals[i];
-            goal.transform.position = originalPositions[i];  // Restore original position
-        }
-    }
-
-    // Trigger the restoration of ExtraGoal positions manually when needed
-    public void ResetExtraGoalPositions()
-    {
-        RestoreExtraGoalPositions();
-    }
-
-    // Override this to manually call ResetExtraGoalPositions after the episode ends
-    public void ManuallyTriggerEndEpisode()
-    {
-        ResetExtraGoalPositions();
-        EndEpisode();
-    }
-
-
-private void OnDrawGizmos()
+    private void OnDrawGizmos()
     {
         Gizmos.color = isExtraGoalTraining ? Color.blue : isNewPlatformActive ? Color.green : Color.red;
         Gizmos.DrawWireCube(transform.position, new Vector3(1f, 1f, 1f));
+    }
+
+    public void ManuallyTriggerEndEpisode()
+    {
+        EnableAllExtraGoals();
+        EndEpisode();
     }
 }
