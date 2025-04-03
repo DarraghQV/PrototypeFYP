@@ -42,6 +42,7 @@ TagManager:
   - portal
   - plus
   - extraGoal
+  - ExtraGoal
   layers:
   - Default
   - TransparentFX
