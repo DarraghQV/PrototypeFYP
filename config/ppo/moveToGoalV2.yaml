@@ -30,6 +30,15 @@ behaviors:
 environment_parameters:
   wall_height:
     curriculum:
+      - name: Extra Goals Training
+        completion_criteria:
+          measure: reward
+          behavior: MoveToGoal
+          signal_smoothing: true
+          min_lesson_length: 100
+          threshold: 0.8
+        value: -1.0  # No walls, but agent trains on collecting Extra Goals
+
       - name: No Wall
         completion_criteria:
           measure: reward  
@@ -82,6 +91,15 @@ environment_parameters:
 
   learning_rate:
     curriculum:
+      - name: Extra Goals Training
+        completion_criteria:
+          measure: reward
+          behavior: MoveToGoal
+          signal_smoothing: true
+          min_lesson_length: 100
+          threshold: 0.8
+        value: 3.0e-4
+
       - name: No Wall
         completion_criteria:
           measure: reward
@@ -123,6 +141,15 @@ environment_parameters:
 
   curiosity_strength:
     curriculum:
+      - name: Extra Goals Training
+        completion_criteria:
+          measure: reward
+          behavior: MoveToGoal
+          signal_smoothing: true
+          min_lesson_length: 100
+          threshold: 0.8
+        value: 0.01  
+
       - name: No Wall
         completion_criteria:
           measure: reward
