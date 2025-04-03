@@ -241,11 +241,6 @@ public class MoveToGoalAgentV1 : Agent
         }
     }
 
-    private void OnDrawGizmos()
-    {
-        Gizmos.color = isExtraGoalTraining ? Color.blue : isNewPlatformActive ? Color.green : Color.red;
-        Gizmos.DrawWireCube(transform.position, new Vector3(1f, 1f, 1f));
-    }
 
     public void ManuallyTriggerEndEpisode()
     {
