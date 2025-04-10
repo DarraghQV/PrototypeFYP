@@ -187,4 +187,4 @@ environment_parameters:
         value: 1.0e-8  
 
       - name: New Platform
-        value: 0.01  
+        value: 1.0e-8   
