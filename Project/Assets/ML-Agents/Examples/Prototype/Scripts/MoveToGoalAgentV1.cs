@@ -6,146 +6,151 @@ using System.Collections.Generic;
 
 public class MoveToGoalAgentV1 : Agent
 {
+    [Header("Object References")]
     [SerializeField] private Transform targetTransform;
     [SerializeField] private Material winMaterial;
     [SerializeField] private Material loseMaterial;
     [SerializeField] private MeshRenderer agentMeshRenderer;
-
-    private Rigidbody agentRigidbody;
-    [SerializeField] private float jumpForce = 5f;
-    private bool isGrounded;
-    private bool canJumpOnJumpHelp;
-
-    private GameObject wallInstance;
+    [SerializeField] private Transform mainCameraTransform;
     [SerializeField] private GameObject wallPrefab;
 
-    private float cumulativeReward = 0f;
+    [Header("Movement Settings")]
+    // Adjust in Inspector if needed
+    [SerializeField] private float moveSpeed = 5f;
+    [SerializeField] private float jumpVelocity = 6f;
+
+    [Header("Reward Settings")]
+    // Adjust in Inspector. Recommended starting points based on last discussion:
+    [SerializeField] private float mainGoalOnlyReward = 2.5f;
+    [SerializeField] private float extraGoalReward = 2.0f; // Or maybe 2.5f
+    [SerializeField] private float combinedGoalRewardBonus = 6.0f; // Or maybe 7.0f
+    [SerializeField] private float standardPenalty = -1.0f;
+    [SerializeField] private float penaltyAfterExtraGoal = -2.0f;
+    // Set step penalty in Inspector. Can be 0 for final lesson via code below.
+    [SerializeField] private float stepPenalty = -0.001f;
+
+    // Internal State
+    private Rigidbody agentRigidbody;
+    private bool isGrounded;
+    private GameObject wallInstance;
+    private List<ExtraGoal> extraGoals = new List<ExtraGoal>();
+
+    // Episode Specific State
     private int stepCount = 0;
     private int extraGoalsCollected = 0;
     private bool isExtraGoalTraining = false;
     private bool isNewPlatformActive = false;
-
-    private List<ExtraGoal> extraGoals = new List<ExtraGoal>();
+    private bool hasCollectedExtraGoalThisEpisode = false;
 
     private void Start()
     {
         agentRigidbody = GetComponent<Rigidbody>();
         agentRigidbody.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
         CacheExtraGoals();
+        if (mainCameraTransform == null) { Debug.LogWarning("Main Camera Transform not assigned..."); }
     }
 
     private void CacheExtraGoals()
     {
-        // Find all ExtraGoal objects in the scene, including inactive ones
         ExtraGoal[] allExtraGoals = Resources.FindObjectsOfTypeAll<ExtraGoal>();
         extraGoals.Clear();
-
         foreach (ExtraGoal goal in allExtraGoals)
         {
-            // Only include objects in the scene hierarchy (not prefabs)
-            if (goal.gameObject.scene.IsValid())
-            {
-                extraGoals.Add(goal);
-            }
+            if (goal.gameObject.scene.IsValid()) { extraGoals.Add(goal); }
         }
     }
 
     public override void OnEpisodeBegin()
     {
-        cumulativeReward = 0f;
         stepCount = 0;
         extraGoalsCollected = 0;
+        hasCollectedExtraGoalThisEpisode = false;
 
         float currentWallHeight = Academy.Instance.EnvironmentParameters.GetWithDefault("wall_height", 0.0f);
-        isExtraGoalTraining = currentWallHeight == -1.0f;
-        isNewPlatformActive = currentWallHeight > 5.25f;
-
-        jumpForce = isExtraGoalTraining ? 0f : 10f;
-        Debug.Log($"Jump Force Set To: {jumpForce}");
+        isExtraGoalTraining = Mathf.Approximately(currentWallHeight, -1.0f);
+        isNewPlatformActive = Mathf.Approximately(currentWallHeight, 5.3f);
 
         Vector3 agentPosition;
+        Vector3 cameraTargetPosition = mainCameraTransform != null ? mainCameraTransform.position : Vector3.zero;
+
         if (isExtraGoalTraining)
         {
-            agentPosition = new Vector3(-41f, 0f, 0f);
-            Debug.Log("Agent in Extra Goals Training, spawned at (-41, 0, 0)");
+            agentPosition = new Vector3(-41f, 0.5f, 0f);
+            cameraTargetPosition = new Vector3(-40f, 30f, 35f);
         }
         else if (isNewPlatformActive)
         {
-            agentPosition = new Vector3(50f, 5f, 0f);
-            Debug.Log("Agent spawned on the new platform.");
+            agentPosition = new Vector3(50f, 5.5f, 0f);
+            cameraTargetPosition = new Vector3(60f, 30f, 35f);
         }
         else
         {
-            agentPosition = new Vector3(-3.5f, 0f, 0f);
-            Debug.Log("Agent spawned at the normal position.");
+            agentPosition = new Vector3(-3.5f, 0.5f, 0f);
+            cameraTargetPosition = new Vector3(0f, 30f, 35f);
         }
 
-        transform.position = agentPosition;
+        transform.localPosition = agentPosition;
+        agentRigidbody.velocity = Vector3.zero;
+        agentRigidbody.angularVelocity = Vector3.zero;
 
-        if (isExtraGoalTraining)
-        {
-            targetTransform.position = new Vector3(0, -0.25f, 0);
-        }
-        else
-        {
-            targetTransform.position = new Vector3(5f, -0.25f, -4f);
-        }
+        if (mainCameraTransform != null) { mainCameraTransform.position = cameraTargetPosition; }
 
-        if (currentWallHeight > 0 && !isNewPlatformActive)
+        if (isExtraGoalTraining) { targetTransform.localPosition = new Vector3(1000f, -100f, 1000f); }
+        else if (isNewPlatformActive) { targetTransform.localPosition = new Vector3(70f, 5f, 0f); }
+        else { targetTransform.localPosition = new Vector3(5f, 1.5f, -4f); }
+
+        bool shouldWallBeActive = currentWallHeight > 0 && !isExtraGoalTraining && !isNewPlatformActive;
+        if (shouldWallBeActive)
         {
-            if (wallInstance == null)
-            {
-                wallInstance = Instantiate(wallPrefab);
-            }
-            wallInstance.transform.position = new Vector3(0, currentWallHeight / 2f, 0);
+            if (wallInstance == null) { wallInstance = Instantiate(wallPrefab, transform.parent); }
+            wallInstance.transform.localPosition = new Vector3(0, currentWallHeight / 2f, 0);
             wallInstance.transform.localScale = new Vector3(1f, currentWallHeight, 15f);
+            wallInstance.SetActive(true);
         }
-        else
-        {
-            if (wallInstance != null)
-            {
-                Destroy(wallInstance);
-                wallInstance = null;
-            }
-        }
+        else { if (wallInstance != null) { wallInstance.SetActive(false); } }
 
-        Debug.Log($"[INFO] Wall Height: {currentWallHeight}, New Platform: {isNewPlatformActive}, Extra Goal Training: {isExtraGoalTraining}");
-
-        // Re-enable all extra goals at episode start
         EnableAllExtraGoals();
+        isGrounded = false;
     }
 
     private void EnableAllExtraGoals()
     {
         foreach (ExtraGoal goal in extraGoals)
         {
-            if (goal != null)
-            {
-                goal.gameObject.SetActive(true);
-            }
+            if (goal != null && goal.gameObject != null) { goal.gameObject.SetActive(true); }
         }
     }
 
     public override void CollectObservations(VectorSensor sensor)
     {
         sensor.AddObservation(isGrounded);
+        // Add observation for whether an extra goal was collected
+        sensor.AddObservation(hasCollectedExtraGoalThisEpisode);
     }
 
     public override void OnActionReceived(ActionBuffers actions)
     {
         stepCount++;
-        cumulativeReward += GetCumulativeReward();
+
+        // Apply Step Penalty Conditionally (Zero penalty for New Platform lesson)
+        float currentStepPenalty = isNewPlatformActive ? 0f : stepPenalty;
+        if (currentStepPenalty != 0)
+        {
+            AddReward(currentStepPenalty);
+        }
 
         float moveX = actions.ContinuousActions[0];
         float moveZ = actions.ContinuousActions[1];
         int jumpAction = actions.DiscreteActions[0];
 
-        Vector3 movement = new Vector3(moveX, 0, moveZ) * 10f * Time.deltaTime;
-        agentRigidbody.MovePosition(transform.position + movement);
+        Vector3 movement = new Vector3(moveX, 0, moveZ) * moveSpeed * Time.deltaTime;
+        Vector3 targetPosition = agentRigidbody.position + movement;
+        agentRigidbody.MovePosition(targetPosition);
 
-        if (jumpAction == 1 && (isGrounded || canJumpOnJumpHelp))
+        bool jumpAllowed = !isExtraGoalTraining;
+        if (jumpAction == 1 && jumpAllowed && isGrounded)
         {
-            Jump();
+            Jump(jumpVelocity);
         }
     }
 
@@ -154,97 +159,76 @@ public class MoveToGoalAgentV1 : Agent
         ActionSegment<float> continuousActions = actionsOut.ContinuousActions;
         continuousActions[0] = Input.GetAxisRaw("Horizontal");
         continuousActions[1] = Input.GetAxisRaw("Vertical");
-
         ActionSegment<int> discreteActions = actionsOut.DiscreteActions;
         discreteActions[0] = Input.GetKey(KeyCode.Space) ? 1 : 0;
     }
 
-    private void Jump()
+    private void Jump(float velocity)
     {
-        if (isGrounded || canJumpOnJumpHelp)
-        {
-            agentRigidbody.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
-            isGrounded = false;
-            canJumpOnJumpHelp = false;
-        }
+        agentRigidbody.AddForce(Vector3.up * velocity, ForceMode.VelocityChange);
+        isGrounded = false;
     }
 
-    private void OnCollisionEnter(Collision collision)
-    {
-        if (collision.collider.CompareTag("ground"))
-        {
-            isGrounded = true;
-        }
-    }
+    // --- Collision Logic ---
+    private void OnCollisionEnter(Collision collision) { if (collision.gameObject.CompareTag("ground")) { isGrounded = true; } }
+    private void OnCollisionStay(Collision collision) { if (collision.gameObject.CompareTag("ground")) { isGrounded = true; } }
+    private void OnCollisionExit(Collision collision) { if (collision.gameObject.CompareTag("ground")) { isGrounded = false; } }
 
+    // --- Trigger Logic ---
     private void OnTriggerEnter(Collider other)
     {
-        if (other.TryGetComponent<Goal>(out Goal goal))
+        if (other.CompareTag("goal"))
         {
             if (!isExtraGoalTraining)
             {
-                float explorationBonus = Academy.Instance.EnvironmentParameters.GetWithDefault("curiosity_strength", 0.0f);
-                SetReward(3.0f + explorationBonus);
+                float finalReward = mainGoalOnlyReward;
+                if (hasCollectedExtraGoalThisEpisode)
+                {
+                    finalReward += combinedGoalRewardBonus;
+                    Debug.Log($"Main Goal Hit: COMBINED Reward! Total: {finalReward}");
+                }
+                else
+                {
+                    Debug.Log($"Main Goal Hit: Main Goal ONLY Reward ({finalReward})");
+                }
+                SetReward(finalReward);
                 agentMeshRenderer.material = winMaterial;
-                EnableAllExtraGoals();
                 EndEpisode();
             }
         }
 
-        if (other.TryGetComponent<ExtraGoal>(out ExtraGoal extraGoal))
+        if (other.CompareTag("ExtraGoal"))
         {
-            SetReward(1.5f);
-            agentMeshRenderer.material = winMaterial;
-            extraGoalsCollected++;
-            extraGoal.gameObject.SetActive(false);
-
-            if (isExtraGoalTraining && extraGoalsCollected >= 3)
+            if (other.gameObject.activeSelf)
             {
-                EnableAllExtraGoals();
-                EndEpisode();
+                SetReward(extraGoalReward);
+                Debug.Log($"Extra Goal Hit: Reward ({extraGoalReward})");
+                agentMeshRenderer.material = winMaterial;
+                extraGoalsCollected++;
+                hasCollectedExtraGoalThisEpisode = true;
+                other.gameObject.SetActive(false);
+                if (isExtraGoalTraining && extraGoalsCollected >= 3) { EndEpisode(); }
             }
         }
 
-        if (other.TryGetComponent<Wall>(out Wall wall))
+        if (other.CompareTag("wall") || other.CompareTag("boundary"))
         {
-            SetReward(-2f);
+            float penalty;
+            if (isExtraGoalTraining || !hasCollectedExtraGoalThisEpisode)
+            {
+                penalty = standardPenalty;
+                Debug.Log($"Wall/Boundary Hit: STANDARD Penalty ({penalty}). Reason: ExtraGoalTr={isExtraGoalTraining}, HasCollectedExtra={hasCollectedExtraGoalThisEpisode}");
+            }
+            else
+            {
+                penalty = penaltyAfterExtraGoal;
+                Debug.Log($"Wall/Boundary Hit: HARSHER Penalty ({penalty})");
+            }
+            SetReward(penalty);
             agentMeshRenderer.material = loseMaterial;
-            EnableAllExtraGoals();
             EndEpisode();
         }
     }
 
-    private void Update()
-    {
-        RotateTowardsMouse();
-
-        float meanReward = stepCount > 0 ? cumulativeReward / stepCount : 0f;
-        Debug.Log($"[INFO] Steps: {stepCount}, Mean Reward: {meanReward}, Extra Goal Training: {isExtraGoalTraining}");
-    }
-
-    private void RotateTowardsMouse()
-    {
-        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-        Plane groundPlane = new Plane(Vector3.up, Vector3.zero);
-
-        if (groundPlane.Raycast(ray, out float distance))
-        {
-            Vector3 targetPoint = ray.GetPoint(distance);
-            Vector3 direction = targetPoint - transform.position;
-            direction.y = 0;
-
-            if (direction.magnitude > 0.1f)
-            {
-                Quaternion targetRotation = Quaternion.LookRotation(direction);
-                transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, Time.deltaTime * 5f);
-            }
-        }
-    }
-
-
-    public void ManuallyTriggerEndEpisode()
-    {
-        EnableAllExtraGoals();
-        EndEpisode();
-    }
+    public void ManuallyTriggerEndEpisode() { EndEpisode(); }
 }
