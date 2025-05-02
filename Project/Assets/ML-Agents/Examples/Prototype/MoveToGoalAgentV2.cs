@@ -108,7 +108,7 @@ public class MoveToGoalAgentV2: Agent
         {
             agentRigidbody.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
             isGrounded = false;
-            canJumpOnJumpHelp = false;  // Reset JumpHelp after jumping
+            canJumpOnJumpHelp = false;  
         }
     }
 

@@ -4,7 +4,7 @@ behaviors:
     hyperparameters:
       batch_size: 64
       buffer_size: 2048
-      learning_rate: 3.0e-4 # Base LR, overridden by curriculum
+      learning_rate: 3.0e-4 
       beta: 5.0e-4
       epsilon: 0.2
       lambd: 0.99
@@ -24,7 +24,7 @@ behaviors:
         strength: 1.0
       curiosity:
         gamma: 0.99
-        strength: 1.0e-8 # Keep default low
+        strength: 1.0
         learning_rate: 3.0e-4
     max_steps: 700000
     time_horizon: 64
@@ -33,59 +33,22 @@ behaviors:
 environment_parameters:
   wall_height:
     curriculum:
-      - name: Extra Goals Training # Lesson 0
-        completion_criteria:
-          measure: reward
-          behavior: MoveToGoal
-          signal_smoothing: true
-          min_lesson_length: 200
-          threshold: 0.8
+      - name: Extra Goals Training 
+        completion_criteria: { measure: reward, behavior: MoveToGoal, signal_smoothing: true, min_lesson_length: 200, threshold: 0.8 }
         value: -1.0
-
-      - name: No Wall # Lesson 1
-        completion_criteria:
-          measure: reward
-          behavior: MoveToGoal
-          signal_smoothing: true
-          min_lesson_length: 200
-          threshold: 0.8
+      - name: No Wall 
+        completion_criteria: { measure: reward, behavior: MoveToGoal, signal_smoothing: true, min_lesson_length: 200, threshold: 0.8 }
         value: 0.0
-
-      - name: Introduce Easy Wall # Lesson 2
-        completion_criteria:
-          measure: reward
-          behavior: MoveToGoal
-          signal_smoothing: true
-          min_lesson_length: 300
-          threshold: 0.7
-          require_reset: true
-        value:
-          sampler_type: uniform
-          sampler_parameters: { min_value: 1.0, max_value: 2.0 }
-
-      - name: Medium Wall # Lesson 3
-        completion_criteria:
-          measure: reward
-          behavior: MoveToGoal
-          signal_smoothing: true
-          min_lesson_length: 400
-          threshold: 0.6
-          require_reset: true
-        value:
-          sampler_type: uniform
-          sampler_parameters: { min_value: 3.0, max_value: 4.0 }
-
-      - name: Final Wall Height # Lesson 4
-        completion_criteria:
-          measure: reward
-          behavior: MoveToGoal
-          signal_smoothing: true
-          min_lesson_length: 400
-          threshold: 0.6
-          require_reset: true # Added require_reset
+      - name: Introduce Easy Wall 
+        completion_criteria: { measure: reward, behavior: MoveToGoal, signal_smoothing: true, min_lesson_length: 300, threshold: 0.7, require_reset: true }
+        value: { sampler_type: uniform, sampler_parameters: { min_value: 1.0, max_value: 2.0 } }
+      - name: Medium Wall 
+        completion_criteria: { measure: reward, behavior: MoveToGoal, signal_smoothing: true, min_lesson_length: 400, threshold: 0.7, require_reset: true }
+        value: { sampler_type: uniform, sampler_parameters: { min_value: 3.0, max_value: 4.0 } }
+      - name: Final Wall Height 
+        completion_criteria: { measure: reward, behavior: MoveToGoal, signal_smoothing: true, min_lesson_length: 400, threshold: 0.7, require_reset: true }
         value: 5.25
-
-      - name: New Platform # Lesson 5 (Final Lesson)
+      - name: New Platform 
         value: 5.3
 
   learning_rate:
@@ -100,35 +63,30 @@ environment_parameters:
         completion_criteria: { measure: reward, behavior: MoveToGoal, signal_smoothing: true, min_lesson_length: 300, threshold: 0.7, require_reset: true }
         value: 3.0e-4
       - name: Medium Wall
-        completion_criteria: { measure: reward, behavior: MoveToGoal, signal_smoothing: true, min_lesson_length: 400, threshold: 0.6, require_reset: true }
-        value: 3.0e-4
+        completion_criteria: { measure: reward, behavior: MoveToGoal, signal_smoothing: true, min_lesson_length: 400, threshold: 0.7, require_reset: true }
+        value: 2.5e-4 
       - name: Final Wall Height
-        completion_criteria: { measure: reward, behavior: MoveToGoal, signal_smoothing: true, min_lesson_length: 400, threshold: 0.6, require_reset: true }
-        value: 3.0e-4 # Kept higher LR for adaptation
-      - name: New Platform
-        value: 3.0e-4 # Kept higher LR for adaptation
+        completion_criteria: { measure: reward, behavior: MoveToGoal, signal_smoothing: true, min_lesson_length: 400, threshold: 0.7, require_reset: true }
+        value: 2.0e-4 
+      - name: New Platform 
+        value: 3.0e-4
 
   curiosity_strength:
     curriculum:
       - name: Extra Goals Training
         completion_criteria: { measure: reward, behavior: MoveToGoal, signal_smoothing: true, min_lesson_length: 200, threshold: 0.8 }
-        value: 0.005
-
+        value: 0.01   
       - name: No Wall
         completion_criteria: { measure: reward, behavior: MoveToGoal, signal_smoothing: true, min_lesson_length: 200, threshold: 0.8 }
-        value: 0.001
-
+        value: 0.005  
       - name: Introduce Easy Wall
         completion_criteria: { measure: reward, behavior: MoveToGoal, signal_smoothing: true, min_lesson_length: 300, threshold: 0.7, require_reset: true }
-        value: 0.001
-
+        value: 0.005  
       - name: Medium Wall
-        completion_criteria: { measure: reward, behavior: MoveToGoal, signal_smoothing: true, min_lesson_length: 400, threshold: 0.6, require_reset: true }
-        value: 0.0025
-
+        completion_criteria: { measure: reward, behavior: MoveToGoal, signal_smoothing: true, min_lesson_length: 400, threshold: 0.7, require_reset: true }
+        value: 0.005 
       - name: Final Wall Height
-        completion_criteria: { measure: reward, behavior: MoveToGoal, signal_smoothing: true, min_lesson_length: 400, threshold: 0.6, require_reset: true }
-        value: 0.0025
-
-      - name: New Platform
-        value: 0.025 # Moderately increased curiosity
+        completion_criteria: { measure: reward, behavior: MoveToGoal, signal_smoothing: true, min_lesson_length: 400, threshold: 0.7, require_reset: true }
+        value: 0.005  
+      - name: New Platform 
+        value: 0.015

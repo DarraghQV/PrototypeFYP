@@ -10,32 +10,27 @@ public class MoveToGoalAgentV1 : Agent
     [SerializeField] private Transform targetTransform;
     [SerializeField] private Material winMaterial;
     [SerializeField] private Material loseMaterial;
-    [SerializeField] private MeshRenderer agentMeshRenderer;
+    [SerializeField] private MeshRenderer[] agentMeshRenderers = new MeshRenderer[3]; 
     [SerializeField] private Transform mainCameraTransform;
     [SerializeField] private GameObject wallPrefab;
 
     [Header("Movement Settings")]
-    // Adjust in Inspector if needed
     [SerializeField] private float moveSpeed = 5f;
     [SerializeField] private float jumpVelocity = 6f;
 
     [Header("Reward Settings")]
-    // Adjust in Inspector. Recommended starting points based on last discussion:
     [SerializeField] private float mainGoalOnlyReward = 2.5f;
-    [SerializeField] private float extraGoalReward = 2.0f; // Or maybe 2.5f
-    [SerializeField] private float combinedGoalRewardBonus = 6.0f; // Or maybe 7.0f
+    [SerializeField] private float extraGoalReward = 2.0f;
+    [SerializeField] private float combinedGoalRewardBonus = 6.0f;
     [SerializeField] private float standardPenalty = -1.0f;
     [SerializeField] private float penaltyAfterExtraGoal = -2.0f;
-    // Set step penalty in Inspector. Can be 0 for final lesson via code below.
     [SerializeField] private float stepPenalty = -0.001f;
 
-    // Internal State
     private Rigidbody agentRigidbody;
     private bool isGrounded;
     private GameObject wallInstance;
     private List<ExtraGoal> extraGoals = new List<ExtraGoal>();
 
-    // Episode Specific State
     private int stepCount = 0;
     private int extraGoalsCollected = 0;
     private bool isExtraGoalTraining = false;
@@ -48,6 +43,21 @@ public class MoveToGoalAgentV1 : Agent
         agentRigidbody.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
         CacheExtraGoals();
         if (mainCameraTransform == null) { Debug.LogWarning("Main Camera Transform not assigned..."); }
+
+        bool allRenderersAssigned = true;
+        if (agentMeshRenderers == null || agentMeshRenderers.Length != 3) {
+            allRenderersAssigned = false;
+        } else {
+            foreach(MeshRenderer rend in agentMeshRenderers) {
+                if (rend == null) {
+                    allRenderersAssigned = false;
+                    break;
+                }
+            }
+        }
+        if (!allRenderersAssigned) {
+             Debug.LogWarning("Agent Mesh Renderers array not fully assigned in Inspector! Material changes might fail.");
+        }
     }
 
     private void CacheExtraGoals()
@@ -93,11 +103,21 @@ public class MoveToGoalAgentV1 : Agent
         agentRigidbody.velocity = Vector3.zero;
         agentRigidbody.angularVelocity = Vector3.zero;
 
-        if (mainCameraTransform != null) { mainCameraTransform.position = cameraTargetPosition; }
+        if (mainCameraTransform != null) {
+            mainCameraTransform.position = cameraTargetPosition;
+        }
 
-        if (isExtraGoalTraining) { targetTransform.localPosition = new Vector3(1000f, -100f, 1000f); }
-        else if (isNewPlatformActive) { targetTransform.localPosition = new Vector3(70f, 5f, 0f); }
-        else { targetTransform.localPosition = new Vector3(5f, 1.5f, -4f); }
+        if (isExtraGoalTraining) {
+            targetTransform.localPosition = new Vector3(1000f, -100f, 1000f);
+        }
+
+        else if (isNewPlatformActive) {
+            targetTransform.localPosition = new Vector3(70f, 3f, 0f);
+        }
+        
+        else {
+            targetTransform.localPosition = new Vector3(5f, 1.5f, -4f);
+        }
 
         bool shouldWallBeActive = currentWallHeight > 0 && !isExtraGoalTraining && !isNewPlatformActive;
         if (shouldWallBeActive)
@@ -124,20 +144,14 @@ public class MoveToGoalAgentV1 : Agent
     public override void CollectObservations(VectorSensor sensor)
     {
         sensor.AddObservation(isGrounded);
-        // Add observation for whether an extra goal was collected
         sensor.AddObservation(hasCollectedExtraGoalThisEpisode);
     }
 
     public override void OnActionReceived(ActionBuffers actions)
     {
         stepCount++;
-
-        // Apply Step Penalty Conditionally (Zero penalty for New Platform lesson)
         float currentStepPenalty = isNewPlatformActive ? 0f : stepPenalty;
-        if (currentStepPenalty != 0)
-        {
-            AddReward(currentStepPenalty);
-        }
+        if (currentStepPenalty != 0) { AddReward(currentStepPenalty); }
 
         float moveX = actions.ContinuousActions[0];
         float moveZ = actions.ContinuousActions[1];
@@ -148,10 +162,7 @@ public class MoveToGoalAgentV1 : Agent
         agentRigidbody.MovePosition(targetPosition);
 
         bool jumpAllowed = !isExtraGoalTraining;
-        if (jumpAction == 1 && jumpAllowed && isGrounded)
-        {
-            Jump(jumpVelocity);
-        }
+        if (jumpAction == 1 && jumpAllowed && isGrounded) { Jump(jumpVelocity); }
     }
 
     public override void Heuristic(in ActionBuffers actionsOut)
@@ -169,12 +180,24 @@ public class MoveToGoalAgentV1 : Agent
         isGrounded = false;
     }
 
-    // --- Collision Logic ---
-    private void OnCollisionEnter(Collision collision) { if (collision.gameObject.CompareTag("ground")) { isGrounded = true; } }
-    private void OnCollisionStay(Collision collision) { if (collision.gameObject.CompareTag("ground")) { isGrounded = true; } }
-    private void OnCollisionExit(Collision collision) { if (collision.gameObject.CompareTag("ground")) { isGrounded = false; } }
+    private void OnCollisionEnter(Collision collision) {
+        if (collision.gameObject.CompareTag("ground")) {
+            isGrounded = true;
+        }
+    }
 
-    // --- Trigger Logic ---
+    private void OnCollisionStay(Collision collision) {
+        if (collision.gameObject.CompareTag("ground")) {
+            isGrounded = true;
+        }
+    }
+
+    private void OnCollisionExit(Collision collision) {
+        if (collision.gameObject.CompareTag("ground")) {
+            isGrounded = false;
+        }
+    }
+
     private void OnTriggerEnter(Collider other)
     {
         if (other.CompareTag("goal"))
@@ -192,7 +215,7 @@ public class MoveToGoalAgentV1 : Agent
                     Debug.Log($"Main Goal Hit: Main Goal ONLY Reward ({finalReward})");
                 }
                 SetReward(finalReward);
-                agentMeshRenderer.material = winMaterial;
+                SetAgentMaterials(winMaterial);
                 EndEpisode();
             }
         }
@@ -203,7 +226,7 @@ public class MoveToGoalAgentV1 : Agent
             {
                 SetReward(extraGoalReward);
                 Debug.Log($"Extra Goal Hit: Reward ({extraGoalReward})");
-                agentMeshRenderer.material = winMaterial;
+                SetAgentMaterials(winMaterial);
                 extraGoalsCollected++;
                 hasCollectedExtraGoalThisEpisode = true;
                 other.gameObject.SetActive(false);
@@ -225,8 +248,21 @@ public class MoveToGoalAgentV1 : Agent
                 Debug.Log($"Wall/Boundary Hit: HARSHER Penalty ({penalty})");
             }
             SetReward(penalty);
-            agentMeshRenderer.material = loseMaterial;
+            SetAgentMaterials(loseMaterial);
             EndEpisode();
+        }
+    }
+
+    private void SetAgentMaterials(Material mat)
+    {
+        if (agentMeshRenderers == null) return; 
+
+        foreach(MeshRenderer rend in agentMeshRenderers)
+        {
+            if (rend != null) 
+            {
+                rend.material = mat;
+            }
         }
     }
 
